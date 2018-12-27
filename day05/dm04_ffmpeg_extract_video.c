@@ -33,13 +33,17 @@ static int alloc_and_copy(AVPacket *out,
 
     if (sps_pps)
         memcpy(out->data + offset, sps_pps, sps_pps_size);
-    memcpy(out->data + sps_pps_size + nal_header_size + offset, in, in_size);
+    memcpy(out->data + offset + sps_pps_size + nal_header_size, in, in_size);
     if (!offset) {
-        AV_WB32(out->data + sps_pps_size, 1);
+        // AV_WB32(out->data + sps_pps_size, 1);
+        (out->data + sps_pps_size)[0] = 0x00;
+        (out->data + sps_pps_size)[1] = 0x00;
+        (out->data + sps_pps_size)[2] = 0x00;
+        (out->data + sps_pps_size)[3] = 0x01;
     } else {
-        (out->data + offset + sps_pps_size)[0] =
-        (out->data + offset + sps_pps_size)[1] = 0;
-        (out->data + offset + sps_pps_size)[2] = 1;
+        (out->data + offset + sps_pps_size)[0] = 0x00;
+        (out->data + offset + sps_pps_size)[1] = 0x00;
+        (out->data + offset + sps_pps_size)[2] = 0x01;
     }
 
     return 0;
@@ -51,6 +55,12 @@ int h264_extradata_to_annexb(const uint8_t *codec_extradata, const int codec_ext
     uint64_t total_size                 = 0;
     uint8_t *out                        = NULL, unit_nb, sps_done = 0,
              sps_seen                   = 0, pps_seen = 0, sps_offset = 0, pps_offset = 0;
+             
+    uint8_t version = *codec_extradata;  // configurationVersion
+    uint8_t avc_profile = *(codec_extradata + 1);  // avcProfileIndication
+    uint8_t profile_cmpt = *(codec_extradata + 2);  // profile_compatibility
+    uint8_t avc_lv = *(codec_extradata + 3);  // AVCLevelIndication
+
     const uint8_t *extradata            = codec_extradata + 4;
     static const uint8_t nalu_header[4] = { 0, 0, 0, 1 };
     int length_size = (*extradata++ & 0x3) + 1; // retrieve length coded size, 用于指示表示编码数据长度所需字节数
@@ -185,8 +195,10 @@ int h264_mp4toannexb(AVFormatContext *fmt_ctx, AVPacket *in, FILE *dst_fd)
 
         */
         /* prepend only to the first type 5 NAL unit of an IDR picture, if no sps/pps are already present */
+        // av_log(NULL, AV_LOG_DEBUG, "unit_type: %d\n", unit_type);
+        printf("unit_type: %d\n", unit_type);
         if (/*s->new_idr && */unit_type == 5 /*&& !s->idr_sps_seen && !s->idr_pps_seen*/) {
-
+            // av_log(NULL, AV_LOG_DEBUG, "unit_type: %d\n", unit_type);
             h264_extradata_to_annexb( fmt_ctx->streams[in->stream_index]->codec->extradata,
                                       fmt_ctx->streams[in->stream_index]->codec->extradata_size,
                                       &spspps_pkt,
@@ -221,6 +233,20 @@ int h264_mp4toannexb(AVFormatContext *fmt_ctx, AVPacket *in, FILE *dst_fd)
         }
 
 
+        // len = fwrite( out->data, 1, out->size, dst_fd);
+        // if(len != out->size){
+        //     av_log(NULL, AV_LOG_DEBUG, "warning, length of writed data isn't equal pkt.size(%d, %d)\n",
+        //             len,
+        //             out->size);
+        // }
+        // fflush(dst_fd);
+
+next_nal:
+        buf        += nal_size;
+        cumul_size += nal_size + 4;//s->length_size;
+    } while (cumul_size < buf_size);
+
+    if (out->size) {
         len = fwrite( out->data, 1, out->size, dst_fd);
         if(len != out->size){
             av_log(NULL, AV_LOG_DEBUG, "warning, length of writed data isn't equal pkt.size(%d, %d)\n",
@@ -228,11 +254,7 @@ int h264_mp4toannexb(AVFormatContext *fmt_ctx, AVPacket *in, FILE *dst_fd)
                     out->size);
         }
         fflush(dst_fd);
-
-next_nal:
-        buf        += nal_size;
-        cumul_size += nal_size + 4;//s->length_size;
-    } while (cumul_size < buf_size);
+    }
 
     /*
     ret = av_packet_copy_props(out, in);
@@ -324,10 +346,12 @@ int main(int argc, char *argv[])
         exit(1);
     }
     */
-
+    int videoFrameInd = 0;
     /*read frames from media file*/
     while(av_read_frame(fmt_ctx, &pkt) >=0 ){
         if(pkt.stream_index == video_stream_index){
+            printf("--------read frame %d-------\n", videoFrameInd++);
+            // av_log(NULL, AV_LOG_DEBUG, "--------read frame %d-------\n", videoFrameInd++);
             /*
             pkt.stream_index = 0;
             av_write_frame(ofmt_ctx, &pkt);

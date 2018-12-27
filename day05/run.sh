@@ -14,8 +14,8 @@ clang -g -o dm04_ffmpeg_mediainfo dm04_ffmpeg_mediainfo.c `pkg-config --libs lib
 
 #抽取音频流
 clang -g -o dm04_ffmpeg_extract_audio dm04_ffmpeg_extract_audio.c `pkg-config --libs libavformat libavutil`
-./dm04_ffmpeg_extract_audio eason.mp4 eason.aac
+./dm04_ffmpeg_extract_audio 13.mp4 13.aac
 
 #抽取视频流
 clang -g -o dm04_ffmpeg_extract_video dm04_ffmpeg_extract_video.c `pkg-config --libs libavformat libavutil`
-./dm04_ffmpeg_extract_video eason.mp4 eason.h264
+./dm04_ffmpeg_extract_video 13.mp4 13.h264
